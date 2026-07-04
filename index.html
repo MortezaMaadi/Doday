@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12172a">
+<title>Doday</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <header class="topbar">
+    <button class="hamburger-btn" id="btnMenu" title="منو">☰</button>
+    <div class="brand">
+      <span class="brand-title">Doday</span>
+      <span class="brand-mark">سالنامه شخصی من</span>
+    </div>
+  </header>
+
+  <!-- ===================== صفحه خانه ===================== -->
+  <main id="view-home" class="view active">
+
+    <section class="hero-page" id="heroToday">
+      <div class="hero-rings">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="hero-main">
+        <div class="hero-date">
+          <div class="hero-daynum" id="heroDayNum">--</div>
+          <div class="hero-weekday" id="heroWeekday">--</div>
+          <div class="hero-month" id="heroMonthYear">--</div>
+          <div class="hero-gregorian" id="heroGregorian">--</div>
+        </div>
+        <div class="hero-occasions">
+          <div class="occ-col occ-official">
+            <div class="occ-label">مناسبت‌های رسمی</div>
+            <ul id="officialList"></ul>
+          </div>
+          <div class="occ-col occ-personal">
+            <div class="occ-label">مناسبت‌های شخصی</div>
+            <ul id="personalList"></ul>
+          </div>
+        </div>
+      </div>
+      <div class="hero-tear"></div>
+    </section>
+
+    <section class="reminders-strip" id="remindersSection" hidden>
+      <div class="section-head">
+        <span class="dot"></span>
+        <h2>یادآورها</h2>
+      </div>
+      <div id="remindersList"></div>
+    </section>
+
+    <section class="section-block" id="tasksSection">
+      <div class="section-head">
+        <span class="dot"></span>
+        <h2>وظایف</h2>
+        <span class="count-badge" id="tasksCount">۰</span>
+      </div>
+      <ul class="item-list" id="tasksList"></ul>
+      <div class="empty-state" id="tasksEmpty" hidden>
+        هیچ وظیفه‌ی بازی نداری. از دکمه‌ی «+» یکی اضافه کن.
+      </div>
+    </section>
+
+    <section class="section-block" id="routinesSection">
+      <div class="section-head">
+        <span class="dot"></span>
+        <h2>روتین‌های امروز</h2>
+        <span class="count-badge" id="routinesCount">۰</span>
+      </div>
+      <ul class="item-list" id="routinesList"></ul>
+      <div class="empty-state" id="routinesEmpty" hidden>
+        برای امروز روتینی ثبت نشده.
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===================== صفحه تقویم ماهانه ===================== -->
+  <main id="view-calendar" class="view">
+    <div class="month-nav">
+      <button class="month-nav-btn" id="monthNext">‹</button>
+      <div class="month-nav-title" id="monthTitle">--</div>
+      <button class="month-nav-btn" id="monthPrev">›</button>
+    </div>
+    <div class="month-grid">
+      <div class="month-grid-head">
+        <span>ش</span><span>ی</span><span>د</span><span>س</span><span>چ</span><span>پ</span><span>ج</span>
+      </div>
+      <div class="month-grid-body" id="monthBody"></div>
+    </div>
+  </main>
+
+  <!-- ===================== صفحه مدیریت رویدادها ===================== -->
+  <main id="view-manage" class="view">
+    <div class="manage-tabs" id="manageTabs">
+      <button data-tab="occasions" class="tab active">مناسبت‌ها</button>
+      <button data-tab="tasks" class="tab">وظایف</button>
+      <button data-tab="routines" class="tab">روتین‌ها</button>
+    </div>
+    <input type="search" class="manage-search" id="manageSearch" placeholder="جستجو بر اساس عنوان…">
+    <ul class="manage-list" id="manageList"></ul>
+    <div class="empty-state" id="manageEmpty" hidden>چیزی برای نمایش نیست.</div>
+    <div class="manage-backup">
+      <button class="ghost-btn" id="btnExport">⬇ دریافت نسخه پشتیبان</button>
+      <button class="ghost-btn" id="btnImport">⬆ بازیابی از فایل</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
+  </main>
+
+  <!-- ===================== صفحه حساب کاربری ===================== -->
+  <main id="view-account" class="view">
+    <div id="accountArea"></div>
+  </main>
+
+  <!-- ===================== صفحه پنل ادمین ===================== -->
+  <main id="view-admin" class="view">
+    <div class="section-head"><h2>کاربران در انتظار تایید</h2></div>
+    <div id="adminPendingList"></div>
+    <div class="section-head" style="margin-top:20px;"><h2>همه‌ی کاربران</h2></div>
+    <div id="adminAllList"></div>
+  </main>
+
+  <button class="fab" id="fabAdd" title="افزودن">+</button>
+</div>
+
+<!-- ===================== منوی کشویی ===================== -->
+<div class="drawer-overlay" id="drawerOverlay" hidden>
+  <div class="drawer" id="drawer" onclick="event.stopPropagation()">
+    <div class="drawer-title">منو</div>
+    <div class="drawer-row">
+      <span>حالت شب</span>
+      <button class="switch on" id="themeSwitch"></button>
+    </div>
+    <button class="drawer-link" id="linkAdmin" data-view="admin" hidden><span class="di">🛡</span> پنل ادمین</button>
+    <button class="drawer-link" data-view="calendar"><span class="di">📅</span> تقویم</button>
+    <button class="drawer-link" data-view="manage"><span class="di">🗂</span> مدیریت رویدادها</button>
+    <button class="drawer-link" data-view="account"><span class="di">👤</span> حساب کاربری</button>
+    <div class="drawer-row" id="autoLaunchRow">
+      <span>بارگذاری خودکار هنگام روشن‌شدن سیستم</span>
+      <button class="switch" id="autoLaunchSwitch"></button>
+    </div>
+    <div class="drawer-spacer"></div>
+    <div class="drawer-footer">
+      <b>Doday (beta)</b><br>
+      ساخته‌شده با ❤ توسط کلود و مرتضی
+    </div>
+  </div>
+</div>
+
+<!-- ===================== مودال افزودن/ویرایش ===================== -->
+<div class="modal-overlay" id="modalOverlay" hidden>
+  <div class="modal-sheet" id="modalSheet">
+    <div class="modal-grip"></div>
+  </div>
+</div>
+
+<!-- ===================== ورقه‌ی جزئیات روز (از تقویم ماهانه) ===================== -->
+<div class="modal-overlay" id="dayDetailOverlay" hidden>
+  <div class="modal-sheet day-detail-sheet" id="dayDetailSheet">
+    <div class="modal-grip"></div>
+  </div>
+</div>
+
+<!-- ===================== مودال تاییدیه‌ی حذف ===================== -->
+<div class="confirm-overlay" id="confirmOverlay" hidden>
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑</div>
+    <div class="confirm-title">حذف برای همیشه</div>
+    <div class="confirm-msg" id="confirmMsg">این مورد برای همیشه حذف میشه و قابل بازگشت نیست. مطمئنی؟</div>
+    <div class="confirm-actions">
+      <button class="btn-secondary" id="confirmCancel">انصراف</button>
+      <button class="btn-danger" id="confirmOk" style="background:var(--brick); color:#fff;">حذف کن</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="jalali.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="sync.js"></script>
+<script src="app.js"></script>
+<script>
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* آفلاین/بدون هاست: بی‌خیال */ });
+    });
+  }
+</script>
+</body>
+</html>
