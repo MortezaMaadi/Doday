@@ -9,8 +9,8 @@
    =================================================================== */
 
 const DODAY_CONFIG = {
-  SUPABASE_URL: 'https://YOUR-PROJECT-REF.supabase.co',
-  SUPABASE_ANON_KEY: 'YOUR-ANON-PUBLIC-KEY',
+  SUPABASE_URL: 'https://xsynpzrbvqfbboflrphl.supabase.co/rest/v1/',
+  SUPABASE_ANON_KEY: 'sb_publishable_3POHY1bP1eEnYSrW4BL1dQ_u4YPQocw',
 
   // این پسوند برای ساخت یک ایمیل داخلی از روی یوزرنیم استفاده میشه
   // (چون Supabase Auth برای ثبت‌نام به ایمیل نیاز داره ولی کاربر فقط یوزرنیم وارد می‌کنه)
