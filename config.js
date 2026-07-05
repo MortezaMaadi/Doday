@@ -8,8 +8,8 @@
    رو هیچ‌وقت اینجا نذار، اون فقط سمت سرور استفاده میشه.)
    ================================================================ */
 
-const DODAY_CONFIG = {
-  SUPABASE_URL: 'https://xsynpzrbvqfbboflrphl.supabase.co',
+window.DODAY_CONFIG = {
+   SUPABASE_URL: 'https://xsynpzrbvqfbboflrphl.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_3POHY1bP1eEnYSrW4BL1dQ_u4YPQocw',
 
   // این پسوند برای ساخت یک ایمیل داخلی از روی یوزرنیم استفاده میشه
