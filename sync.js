@@ -3,7 +3,7 @@
    اگه config.js پر نشده باشه، این ماژول غیرفعال می‌مونه و برنامه
    کاملاً محلی (فقط localStorage) کار می‌کنه — هیچ‌چیز خراب نمیشه.
    =================================================================== */
-const Sync = (() => {
+window.Sync = (() => {
   let client = null;
   let currentUser = null;
   let currentProfile = null;
