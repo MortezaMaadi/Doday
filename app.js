@@ -837,6 +837,7 @@
     if (name === 'account') renderAccount();
     if (name === 'admin') renderAdmin();
     closeDrawer();
+    $('#btnToday').hidden = name === 'home';
   }
 
   function openDrawer() { $('#drawerOverlay').hidden = false; }
@@ -844,11 +845,13 @@
 
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', DB.settings.theme);
-    $('#themeSwitch').classList.toggle('on', DB.settings.theme === 'dark');
+    // آیکون نشون‌دهنده‌ی حالتیه که با کلیک بهش میری، نه حالت فعلی
+    $('#themeSwitch').textContent = DB.settings.theme === 'dark' ? '☀️' : '🌙';
   }
 
   function bindStaticEvents() {
     $('#btnMenu').addEventListener('click', openDrawer);
+    $('#btnToday').addEventListener('click', () => switchView('home'));
     $('#drawerOverlay').addEventListener('click', closeDrawer);
     $$('.drawer-link[data-view]').forEach((btn) => btn.addEventListener('click', () => switchView(btn.dataset.view)));
 
@@ -962,6 +965,25 @@
     reader.readAsText(file);
   }
 
+  // همگام‌سازی خودکار: اگه این دستگاه تغییر آفلاینِ فرستاده‌نشده داره، اول همونو بفرست بالا
+  // (تا گم نشه)، وگرنه آخرین نسخه‌ی سرور رو بخون و جایگزین همینجا کن — بدون دخالت کاربر.
+  async function pullAndApply() {
+    if (!window.Sync || !Sync.isLoggedIn()) return;
+    if (Sync.hasPending()) {
+      await Sync.pushDataSafe(DB);
+      return;
+    }
+    const res = await Sync.pullData();
+    if (res.ok && res.data) {
+      DB = Object.assign(defaultDB(), res.data);
+      applyTheme();
+      persist(true);
+    } else if (res.ok && !res.data) {
+      await Sync.pushDataSafe(DB);
+    }
+    refreshAll();
+  }
+
   // ------------------------------------------------------------------
   // ۱۵) حساب کاربری (Sync / Supabase)
   // ------------------------------------------------------------------
@@ -979,20 +1001,11 @@
       const p = Sync.getProfile();
       area.innerHTML = `
         <div class="auth-status"><span class="dot-status online"></span> وارد شده به‌عنوان <b>${p.display_name || p.username}</b></div>
+        <div class="empty-state" style="margin-top:10px;">اطلاعات به‌صورت خودکار بین دستگاه‌هات همگام میشه.</div>
         <div class="modal-actions" style="margin-top:14px;">
-          <button class="btn-secondary" id="btnSyncNow" style="flex:1">همگام‌سازی الان</button>
           <button class="btn-danger" id="btnLogout" style="flex:1">خروج از حساب</button>
         </div>`;
       $('#btnLogout').addEventListener('click', async () => { await Sync.signOut(); renderAccount(); toast('خارج شدی'); });
-      $('#btnSyncNow').addEventListener('click', async () => {
-        const pull = await Sync.pullData();
-        if (pull.ok && pull.data) {
-          const ok = await askConfirm('داده‌ی ذخیره‌شده روی سرور جایگزین اطلاعات همین دستگاه بشه؟');
-          if (ok) { DB = Object.assign(defaultDB(), pull.data); applyTheme(); persist(true); refreshAll(); }
-        }
-        await Sync.pushDataSafe(DB);
-        toast('همگام‌سازی انجام شد');
-      });
       return;
     }
     area.innerHTML = `
@@ -1021,7 +1034,7 @@
         const password = $('#authPassword').value;
         if (!username || !password) { toast('نام کاربری و رمز عبور رو وارد کن'); return; }
         const res = await Sync.signIn({ username, password });
-        if (res.ok) { toast('خوش اومدی!'); renderAccount(); refreshAll(); }
+        if (res.ok) { toast('خوش اومدی!'); await pullAndApply(); renderAccount(); }
         else toast(res.error || 'ورود ناموفق بود');
       });
     } else {
@@ -1051,12 +1064,16 @@
     if (!window.Sync || !Sync.isConfigured() || !Sync.isAdmin()) {
       switchView('home'); return;
     }
+    const myId = Sync.getUser()?.id;
     const pending = await Sync.adminListPending();
     $('#adminPendingList').innerHTML = pending.length
       ? pending.map((u) => `
         <div class="admin-user-row">
           <span>${u.display_name || u.username} (${u.username})</span>
-          <button data-approve="${u.id}">تایید</button>
+          <div style="display:flex; gap:6px;">
+            <button data-approve="${u.id}">تایید</button>
+            <button data-del="${u.id}" style="background:var(--brick);">حذف</button>
+          </div>
         </div>`).join('')
       : '<div class="empty-state">کسی در انتظار تایید نیست.</div>';
     $$('#adminPendingList [data-approve]').forEach((btn) => btn.addEventListener('click', async () => {
@@ -1064,12 +1081,26 @@
       toast('کاربر تایید شد');
       renderAdmin();
     }));
+    $$('#adminPendingList [data-del]').forEach((btn) => btn.addEventListener('click', () => handleAdminDelete(btn.dataset.del)));
+
     const all = await Sync.adminListAll();
     $('#adminAllList').innerHTML = all.map((u) => `
       <div class="admin-user-row">
         <span>${u.display_name || u.username} (${u.username}) ${u.is_admin ? '· ادمین' : ''}</span>
-        <span class="tag">${u.approved ? 'تایید‌شده' : 'در انتظار'}</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span class="tag">${u.approved ? 'تایید‌شده' : 'در انتظار'}</span>
+          ${u.id === myId ? '' : `<button data-del="${u.id}" style="background:var(--brick);">حذف</button>`}
+        </div>
       </div>`).join('');
+    $$('#adminAllList [data-del]').forEach((btn) => btn.addEventListener('click', () => handleAdminDelete(btn.dataset.del)));
+  }
+
+  async function handleAdminDelete(userId) {
+    const ok = await askConfirm('این کاربر برای همیشه از برنامه حذف میشه. مطمئنی؟');
+    if (!ok) return;
+    const res = await Sync.adminDeleteUser(userId);
+    if (res.ok) { toast('کاربر حذف شد'); renderAdmin(); }
+    else toast(res.error || 'حذف ناموفق بود');
   }
 
   function updateAdminLinkVisibility() {
@@ -1097,6 +1128,7 @@
       if (ok) {
         Sync.onChange(() => { updateAdminLinkVisibility(); });
         updateAdminLinkVisibility();
+        if (Sync.isLoggedIn()) { await pullAndApply(); }
       }
       window.addEventListener('online', () => {
         if (Sync.isLoggedIn() && Sync.hasPending()) toast('اتصال برقرار شد، در حال هماهنگ‌سازی…');
