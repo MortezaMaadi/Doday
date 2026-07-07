@@ -162,13 +162,18 @@ window.Sync = (() => {
     const { error } = await client.from('profiles').update({ approved: false }).eq('id', userId);
     return { ok: !error, error: error && error.message };
   }
+  async function adminDeleteUser(userId) {
+    if (!client) return { ok: false };
+    if (currentUser && userId === currentUser.id) return { ok: false, error: 'نمی‌تونی خودت رو حذف کنی' };
+    const { error } = await client.from('profiles').delete().eq('id', userId);
+    return { ok: !error, error: error && error.message };
+  }
 
   return {
     init, isConfigured, onChange, setDataProvider, hasPending,
     signUp, signIn, signOut,
     getUser, getProfile, isLoggedIn, isAdmin,
     pushData, pushDataSafe, pullData,
-    adminListPending, adminListAll, adminApprove, adminRevoke,
+    adminListPending, adminListAll, adminApprove, adminRevoke, adminDeleteUser,
   };
 })();
-
