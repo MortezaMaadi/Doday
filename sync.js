@@ -141,6 +141,23 @@ window.Sync = (() => {
     return { ok: true, data: data ? data.data : null, updatedAt: data ? data.updated_at : null };
   }
 
+  async function getHistory() {
+    if (!client || !isLoggedIn()) return [];
+    const { data, error } = await client
+      .from('almanac_data_history')
+      .select('id, saved_at')
+      .eq('user_id', currentUser.id)
+      .order('saved_at', { ascending: false });
+    return error ? [] : (data || []);
+  }
+
+  async function restoreFromHistory(historyId) {
+    if (!client || !isLoggedIn()) return { ok: false };
+    const { data, error } = await client.from('almanac_data_history').select('data').eq('id', historyId).eq('user_id', currentUser.id).maybeSingle();
+    if (error || !data) return { ok: false, error: error && error.message };
+    return { ok: true, data: data.data };
+  }
+
   // ---------------- پنل ادمین ----------------
   async function adminListPending() {
     if (!client) return [];
@@ -173,7 +190,7 @@ window.Sync = (() => {
     init, isConfigured, onChange, setDataProvider, hasPending,
     signUp, signIn, signOut,
     getUser, getProfile, isLoggedIn, isAdmin,
-    pushData, pushDataSafe, pullData,
+    pushData, pushDataSafe, pullData, getHistory, restoreFromHistory,
     adminListPending, adminListAll, adminApprove, adminRevoke, adminDeleteUser,
   };
 })();
