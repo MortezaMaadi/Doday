@@ -43,9 +43,6 @@ html[data-theme="light"] {
   --shell-surface-2: rgba(36, 31, 24, 0.09);
   --shell-border: rgba(36, 31, 24, 0.13);
 }
-html[data-theme="light"] body {
-  background: radial-gradient(1000px 500px at 90% -10%, #fbf3e2 0%, transparent 60%), var(--shell-bg);
-}
 html[data-theme="light"] .hero-page,
 html[data-theme="light"] .pager-day,
 html[data-theme="light"] .modal-sheet,
@@ -54,6 +51,7 @@ html[data-theme="light"] .day-detail-sheet {
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -61,16 +59,15 @@ html, body {
   height: 100%;
   background: var(--night);
 }
+html { background: var(--shell-bg); }
+html[data-theme="light"] { background: var(--shell-bg); }
 
 body {
   font-family: var(--font-fa);
   color: var(--shell-text);
   direction: rtl;
   -webkit-font-smoothing: antialiased;
-  background:
-    radial-gradient(1200px 600px at 85% -10%, #232c52 0%, transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, #1c2242 0%, transparent 55%),
-    var(--shell-bg);
+  background: var(--shell-bg);
   min-height: 100vh;
   transition: background .25s ease, color .25s ease;
 }
@@ -98,6 +95,8 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
   display: flex;
   align-items: baseline;
   gap: 8px;
+  flex: 1;
+  justify-content: center;
 }
 .brand-mark {
   font-family: var(--font-mono);
@@ -122,6 +121,7 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
   font-size: 16px;
   flex: none;
 }
+.icon-btn[hidden], .hamburger-btn[hidden] { display: none; }
 
 /* ---------------- Views ---------------- */
 .view { display: none; padding: 8px 16px 12px; animation: fadeIn .25s ease; }
@@ -469,6 +469,21 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 }
 @keyframes drawerIn { from { transform: translateX(20px); opacity: 0;} to { transform: translateX(0); opacity: 1;} }
 .drawer-title { font-weight: 800; font-size: 15px; color: var(--shell-text); margin-bottom: 18px; }
+.drawer-top-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.drawer-top-row .drawer-title { margin-bottom: 0; }
+.theme-icon-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--shell-border);
+  background: var(--shell-surface);
+  font-size: 19px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex: none;
+}
 .drawer-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 13px 4px;
