@@ -19,6 +19,7 @@
       <span class="brand-title">Doday</span>
       <span class="brand-mark">سالنامه شخصی من</span>
     </div>
+    <button class="icon-btn" id="btnToday" title="بازگشت به امروز" hidden>🏠</button>
   </header>
 
   <!-- ===================== صفحه خانه ===================== -->
@@ -134,10 +135,9 @@
 <!-- ===================== منوی کشویی ===================== -->
 <div class="drawer-overlay" id="drawerOverlay" hidden>
   <div class="drawer" id="drawer" onclick="event.stopPropagation()">
-    <div class="drawer-title">منو</div>
-    <div class="drawer-row">
-      <span>حالت شب</span>
-      <button class="switch on" id="themeSwitch"></button>
+    <div class="drawer-top-row">
+      <div class="drawer-title">منو</div>
+      <button class="theme-icon-btn" id="themeSwitch" title="تغییر حالت شب/روز">🌙</button>
     </div>
     <button class="drawer-link" id="linkAdmin" data-view="admin" hidden><span class="di">🛡</span> پنل ادمین</button>
     <button class="drawer-link" data-view="calendar"><span class="di">📅</span> تقویم</button>
