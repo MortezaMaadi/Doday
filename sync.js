@@ -22,21 +22,6 @@ window.Sync = (() => {
   function hasPending() { return pendingPush; }
   function setDataProvider(fn) { dataProvider = fn; }
 
-  // به‌جای تگ <script> مستقیم توی index.html (که می‌تونه کل صفحه رو معطل
-  // یه سرور خارجی کنه)، این کتابخونه رو خودمون، غیرمسدودکننده، لود می‌کنیم.
-  // اگه اینترنت نباشه یا کند باشه، بخش محلی برنامه اصلاً منتظرش نمی‌مونه.
-  function loadSupabaseLib(timeoutMs) {
-    return new Promise((resolve) => {
-      if (window.supabase && window.supabase.createClient) { resolve(true); return; }
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-      const timer = setTimeout(() => resolve(false), timeoutMs || 6000);
-      script.onload = () => { clearTimeout(timer); resolve(true); };
-      script.onerror = () => { clearTimeout(timer); resolve(false); };
-      document.head.appendChild(script);
-    });
-  }
-
   function isConfigured() {
     return !!(window.DODAY_CONFIG
       && DODAY_CONFIG.SUPABASE_URL
@@ -55,8 +40,7 @@ window.Sync = (() => {
 
   async function init() {
     if (!isConfigured()) return false;
-    const loaded = await loadSupabaseLib();
-    if (!loaded || !window.supabase || !window.supabase.createClient) return false;
+    if (!window.supabase || !window.supabase.createClient) return false;
     try { if (localStorage.getItem('doday_sync_pending')) pendingPush = true; } catch (e) { /* noop */ }
     client = window.supabase.createClient(DODAY_CONFIG.SUPABASE_URL, DODAY_CONFIG.SUPABASE_ANON_KEY);
     const { data } = await client.auth.getSession();
