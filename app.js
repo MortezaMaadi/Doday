@@ -1002,10 +1002,13 @@
       area.innerHTML = `
         <div class="auth-status"><span class="dot-status online"></span> وارد شده به‌عنوان <b>${p.display_name || p.username}</b></div>
         <div class="empty-state" style="margin-top:10px;">اطلاعات به‌صورت خودکار بین دستگاه‌هات همگام میشه.</div>
+        <div class="section-head" style="margin-top:18px;"><h2 style="font-size:13px;">نسخه‌های پشتیبان قبلی</h2></div>
+        <div id="historyList"><div class="empty-state">در حال بارگذاری…</div></div>
         <div class="modal-actions" style="margin-top:14px;">
           <button class="btn-danger" id="btnLogout" style="flex:1">خروج از حساب</button>
         </div>`;
       $('#btnLogout').addEventListener('click', async () => { await Sync.signOut(); renderAccount(); toast('خارج شدی'); });
+      renderHistoryList();
       return;
     }
     area.innerHTML = `
@@ -1054,6 +1057,43 @@
           $('#authFormArea').innerHTML = `<div class="pending-box">ثبت‌نام انجام شد ✅<br>حساب شما در انتظار تایید مدیره. بعد از تایید می‌تونی وارد بشی.</div>`;
         } else toast(res.error || 'ثبت‌نام ناموفق بود');
       });
+    }
+  }
+
+  function formatHistoryTime(isoString) {
+    const d = new Date(isoString);
+    const [jy, jm, jd] = Cal.gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${faNum(jd)} ${Cal.JALALI_MONTHS[jm - 1]} ${faNum(jy)} — ساعت ${faNum(hh)}:${faNum(mm)}`;
+  }
+
+  async function renderHistoryList() {
+    const list = await Sync.getHistory();
+    const box = $('#historyList');
+    if (!box) return;
+    box.innerHTML = list.length
+      ? list.map((h) => `
+        <div class="admin-user-row">
+          <span>${formatHistoryTime(h.saved_at)}</span>
+          <button data-restore="${h.id}">بازگردانی</button>
+        </div>`).join('')
+      : '<div class="empty-state">هنوز نسخه‌ی پشتیبانی ثبت نشده (بعد از اولین تغییر بعدی، اینجا نشون داده میشه).</div>';
+    $$('#historyList [data-restore]').forEach((btn) => btn.addEventListener('click', () => handleRestoreHistory(btn.dataset.restore)));
+  }
+
+  async function handleRestoreHistory(historyId) {
+    const ok = await askConfirm('اطلاعات فعلی با این نسخه‌ی قدیمی جایگزین میشه. مطمئنی؟');
+    if (!ok) return;
+    const res = await Sync.restoreFromHistory(historyId);
+    if (res.ok) {
+      DB = Object.assign(defaultDB(), res.data);
+      applyTheme();
+      persist();
+      refreshAll();
+      toast('بازگردانی شد');
+    } else {
+      toast(res.error || 'بازگردانی ناموفق بود');
     }
   }
 
