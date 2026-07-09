@@ -543,7 +543,7 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 6px; }
-.field input[type="text"], .field textarea, .field select, .field input[type="number"], .field input[type="time"] {
+.field input[type="text"], .field textarea, .field select, .field input[type="number"], .field input[type="time"], .field input[type="password"], .field input[type="search"] {
   width: 100%;
   padding: 11px 13px;
   border-radius: 11px;
