@@ -22,6 +22,35 @@ window.Sync = (() => {
   function hasPending() { return pendingPush; }
   function setDataProvider(fn) { dataProvider = fn; }
 
+  // به‌جای تگ <script> مستقیم توی index.html (که می‌تونه کل صفحه رو معطل
+  // یه سرور خارجی کنه)، این کتابخونه رو خودمون، غیرمسدودکننده، لود می‌کنیم.
+  // اگه اینترنت نباشه یا کند باشه، بخش محلی برنامه اصلاً منتظرش نمی‌مونه.
+  let libPromise = null;
+  function loadSupabaseLib(timeoutMs) {
+    if (window.supabase && window.supabase.createClient) return Promise.resolve(true);
+    if (libPromise) return libPromise;
+    libPromise = new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      const timer = setTimeout(() => { libPromise = null; resolve(false); }, timeoutMs || 8000);
+      script.onload = () => { clearTimeout(timer); resolve(true); };
+      script.onerror = () => { clearTimeout(timer); libPromise = null; resolve(false); };
+      document.head.appendChild(script);
+    });
+    return libPromise;
+  }
+
+  // اگه اتصال (client) هنوز آماده نشده، سعی می‌کنه بسازتش — با یه فرصت
+  // زمانی بیشتر، چون این‌بار کاربر واقعاً منتظر نتیجه‌ست (مثلاً زده «ورود»)
+  async function ensureClient(timeoutMs) {
+    if (client) return true;
+    if (!isConfigured()) return false;
+    const loaded = await loadSupabaseLib(timeoutMs);
+    if (!loaded || !window.supabase || !window.supabase.createClient) return false;
+    client = window.supabase.createClient(DODAY_CONFIG.SUPABASE_URL, DODAY_CONFIG.SUPABASE_ANON_KEY);
+    return true;
+  }
+
   function isConfigured() {
     return !!(window.DODAY_CONFIG
       && DODAY_CONFIG.SUPABASE_URL
@@ -40,9 +69,9 @@ window.Sync = (() => {
 
   async function init() {
     if (!isConfigured()) return false;
-    if (!window.supabase || !window.supabase.createClient) return false;
+    const ok = await ensureClient(8000);
+    if (!ok) return false;
     try { if (localStorage.getItem('doday_sync_pending')) pendingPush = true; } catch (e) { /* noop */ }
-    client = window.supabase.createClient(DODAY_CONFIG.SUPABASE_URL, DODAY_CONFIG.SUPABASE_ANON_KEY);
     const { data } = await client.auth.getSession();
     if (data && data.session) {
       currentUser = data.session.user;
@@ -63,7 +92,8 @@ window.Sync = (() => {
   }
 
   async function signUp({ username, password, displayName }) {
-    if (!client) return { ok: false, error: 'اتصال به سرور تنظیم نشده' };
+    const ok = await ensureClient(15000);
+    if (!ok) return { ok: false, error: 'اتصال به سرور برقرار نشد، دوباره امتحان کن' };
     const email = usernameToEmail(username);
     const { data, error } = await client.auth.signUp({
       email, password,
@@ -79,7 +109,8 @@ window.Sync = (() => {
   }
 
   async function signIn({ username, password }) {
-    if (!client) return { ok: false, error: 'اتصال به سرور تنظیم نشده' };
+    const ok = await ensureClient(15000);
+    if (!ok) return { ok: false, error: 'اتصال به سرور برقرار نشد، دوباره امتحان کن' };
     const email = usernameToEmail(username);
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, error: 'نام کاربری یا رمز عبور اشتباهه' };
@@ -117,6 +148,10 @@ window.Sync = (() => {
   }
   async function pushDataSafe(dataObj) {
     if (!isLoggedIn()) return { ok: false };
+    // خوش‌بینانه علامت می‌زنیم: قبل از اینکه حتی بفهمیم موفق میشه یا نه.
+    // اگه همین‌جا صفحه بسته/رفرش بشه، این پرچم از قبل ذخیره شده و دفعه‌ی
+    // بعد به‌جای «خوندن و جایگزین کردن»، درست میره سراغ «ادغام و دوباره فرستادن».
+    markPending();
     try {
       const res = await pushData(dataObj);
       if (res.ok) clearPending(); else markPending();
@@ -127,12 +162,8 @@ window.Sync = (() => {
     }
   }
 
-  // وقتی اینترنت برگرده، اگه تغییری معلق مونده بود، خودکار دوباره بفرست
-  window.addEventListener('online', async () => {
-    if (isLoggedIn() && hasPending() && dataProvider) {
-      await pushDataSafe(dataProvider());
-    }
-  });
+  // توجه: واکنش به رویداد آنلاین‌شدن (با منطق ادغام) توی app.js انجام میشه،
+  // نه اینجا — چون ادغام نیاز به دیدن کل دیتای محلی داره که اونجاست.
 
   async function pullData() {
     if (!client || !isLoggedIn()) return { ok: false };
