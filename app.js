@@ -967,10 +967,37 @@
 
   // همگام‌سازی خودکار: اگه این دستگاه تغییر آفلاینِ فرستاده‌نشده داره، اول همونو بفرست بالا
   // (تا گم نشه)، وگرنه آخرین نسخه‌ی سرور رو بخون و جایگزین همینجا کن — بدون دخالت کاربر.
+  // همگام‌سازی خودکار با ادغام واقعی (نه جایگزینی کامل):
+  // اگه این دستگاه تغییر آفلاینِ فرستاده‌نشده داره، اول آخرین نسخه‌ی سرور رو
+  // می‌خونیم، با اطلاعات محلی ترکیب می‌کنیم (هیچی از هیچ‌کدوم پاک نمیشه)،
+  // و نسخه‌ی ترکیبی رو هم محلی ذخیره و هم به سرور می‌فرستیم.
+  function mergeArraysById(serverArr, localArr) {
+    const map = new Map();
+    (serverArr || []).forEach((item) => map.set(item.id, item));
+    (localArr || []).forEach((item) => map.set(item.id, item)); // نسخه‌ی محلی در تعارض برنده‌ست
+    return Array.from(map.values());
+  }
+  function mergeDB(serverData, localData) {
+    if (!serverData) return localData;
+    return {
+      version: 2,
+      occasions: mergeArraysById(serverData.occasions, localData.occasions),
+      tasks: mergeArraysById(serverData.tasks, localData.tasks),
+      routines: mergeArraysById(serverData.routines, localData.routines),
+      routineCompletions: Object.assign({}, serverData.routineCompletions, localData.routineCompletions),
+      settings: localData.settings || serverData.settings,
+    };
+  }
+
   async function pullAndApply() {
     if (!window.Sync || !Sync.isLoggedIn()) return;
     if (Sync.hasPending()) {
+      const res = await Sync.pullData();
+      DB = res.ok ? mergeDB(res.data, DB) : DB;
+      applyTheme();
+      persist(true);
       await Sync.pushDataSafe(DB);
+      refreshAll();
       return;
     }
     const res = await Sync.pullData();
@@ -1170,8 +1197,12 @@
         updateAdminLinkVisibility();
         if (Sync.isLoggedIn()) { await pullAndApply(); }
       }
-      window.addEventListener('online', () => {
-        if (Sync.isLoggedIn() && Sync.hasPending()) toast('اتصال برقرار شد، در حال هماهنگ‌سازی…');
+      window.addEventListener('online', async () => {
+        if (Sync.isLoggedIn() && Sync.hasPending()) {
+          toast('اتصال برقرار شد، در حال هماهنگ‌سازی…');
+          await pullAndApply();
+          toast('هماهنگ‌سازی انجام شد');
+        }
       });
     }
   }
