@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "doday",
+  "main": "worker.js",
+  "compatibility_date": "2026-07-09",
+  "observability": {
+    "enabled": true
+  },
+"assets": {
+  "directory": ".",
+  "binding": "ASSETS",
+  "run_worker_first": [
+    "/api/*"
+  ]
+},
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}
