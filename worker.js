@@ -4,7 +4,6 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // API: دریافت داده
     if (url.pathname === "/api/data" && request.method === "GET") {
       try {
         const sql = neon(env.DATABASE_URL);
@@ -34,7 +33,6 @@ export default {
       }
     }
 
-    // API: ذخیره داده
     if (url.pathname === "/api/data" && request.method === "PUT") {
       try {
         const body = await request.json();
@@ -50,7 +48,11 @@ export default {
 
         const rows = await sql`
           INSERT INTO doday_data (id, data, updated_at)
-          VALUES ('morteza', ${JSON.stringify(body.data)}::jsonb, NOW())
+          VALUES (
+            'morteza',
+            ${JSON.stringify(body.data)}::jsonb,
+            NOW()
+          )
           ON CONFLICT (id)
           DO UPDATE SET
             data = EXCLUDED.data,
@@ -69,7 +71,6 @@ export default {
       }
     }
 
-    // بقیه درخواست‌ها → فایل‌های خود Doday
     return env.ASSETS.fetch(request);
   }
 };
