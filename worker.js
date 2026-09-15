@@ -4,6 +4,15 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // تست وضعیت متغیرهای محیطی
+    if (url.pathname === "/api/test-env") {
+      return Response.json({
+        hasDatabaseUrl: !!env.DATABASE_URL,
+        hasNeon: !!env.neon
+      });
+    }
+
+    // API: دریافت داده
     if (url.pathname === "/api/data" && request.method === "GET") {
       try {
         const sql = neon(env.DATABASE_URL);
@@ -23,18 +32,21 @@ export default {
         }
 
         return Response.json(rows[0]);
-              } catch (error) {
-          console.error(error);
-          return Response.json(
-            {
-              error: "Database error",
-              detail: error?.message || String(error)
-            },
-            { status: 500 }
-          );
-        }
-    } 
 
+      } catch (error) {
+        console.error(error);
+
+        return Response.json(
+          {
+            error: "Database error",
+            detail: error?.message || String(error)
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // API: ذخیره داده
     if (url.pathname === "/api/data" && request.method === "PUT") {
       try {
         const body = await request.json();
@@ -63,18 +75,21 @@ export default {
         `;
 
         return Response.json(rows[0]);
-        } catch (error) {
-          console.error(error);
-          return Response.json(
-            {
-              error: "Database error",
-              detail: error?.message || String(error)
-            },
-            { status: 500 }
-          );
-        }
+
+      } catch (error) {
+        console.error(error);
+
+        return Response.json(
+          {
+            error: "Database error",
+            detail: error?.message || String(error)
+          },
+          { status: 500 }
+        );
+      }
     }
 
+    // بقیه درخواست‌ها → فایل‌های Doday
     return env.ASSETS.fetch(request);
   }
 };
