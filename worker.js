@@ -12,15 +12,25 @@ export default {
       });
     }
 
+    // شناسه کاربر از درخواست
+    const userId = url.searchParams.get("user");
+
     // API: دریافت داده
     if (url.pathname === "/api/data" && request.method === "GET") {
       try {
+        if (!userId) {
+          return Response.json(
+            { error: "Missing user" },
+            { status: 400 }
+          );
+        }
+
         const sql = neon(env.DATABASE_URL);
 
         const rows = await sql`
           SELECT data, updated_at
           FROM doday_data
-          WHERE id = 'morteza'
+          WHERE id = ${userId}
           LIMIT 1
         `;
 
@@ -49,6 +59,13 @@ export default {
     // API: ذخیره داده
     if (url.pathname === "/api/data" && request.method === "PUT") {
       try {
+        if (!userId) {
+          return Response.json(
+            { error: "Missing user" },
+            { status: 400 }
+          );
+        }
+
         const body = await request.json();
 
         if (!body || typeof body.data !== "object") {
@@ -63,7 +80,7 @@ export default {
         const rows = await sql`
           INSERT INTO doday_data (id, data, updated_at)
           VALUES (
-            'morteza',
+            ${userId},
             ${JSON.stringify(body.data)}::jsonb,
             NOW()
           )
