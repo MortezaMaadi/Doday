@@ -1,8 +1,9 @@
 /* ===================================================================
-   sync.js — لایه‌ی اختیاری اتصال به Supabase (حساب کاربری + سینک ابری)
-   اگه config.js پر نشده باشه، این ماژول غیرفعال می‌مونه و برنامه
-   کاملاً محلی (فقط localStorage) کار می‌کنه — هیچ‌چیز خراب نمیشه.
-   =================================================================== */
+  sync.js — لایه اتصال حساب کاربری + سینک داده
+  احراز هویت و پروفایل فعلاً از Supabase استفاده می‌کنند.
+  داده اصلی سالنامه از طریق Cloudflare Worker به Neon سینک می‌شود.
+  =================================================================== */
+
 window.Sync = (() => {
   let client = null;
   let currentUser = null;
@@ -11,217 +12,616 @@ window.Sync = (() => {
   let pendingPush = false;
   const listeners = [];
 
+  const WORKER_URL =
+    'https://71fe94a5-doday.mortezamoadi.workers.dev';
+
   function markPending() {
     pendingPush = true;
-    try { localStorage.setItem('doday_sync_pending', '1'); } catch (e) { /* noop */ }
+    try {
+      localStorage.setItem('doday_sync_pending', '1');
+    } catch (e) {}
   }
+
   function clearPending() {
     pendingPush = false;
-    try { localStorage.removeItem('doday_sync_pending'); } catch (e) { /* noop */ }
+    try {
+      localStorage.removeItem('doday_sync_pending');
+    } catch (e) {}
   }
-  function hasPending() { return pendingPush; }
-  function setDataProvider(fn) { dataProvider = fn; }
 
-  // به‌جای تگ <script> مستقیم توی index.html (که می‌تونه کل صفحه رو معطل
-  // یه سرور خارجی کنه)، این کتابخونه رو خودمون، غیرمسدودکننده، لود می‌کنیم.
-  // اگه اینترنت نباشه یا کند باشه، بخش محلی برنامه اصلاً منتظرش نمی‌مونه.
+  function hasPending() {
+    return pendingPush;
+  }
+
+  function setDataProvider(fn) {
+    dataProvider = fn;
+  }
+
   let libPromise = null;
+
   function loadSupabaseLib(timeoutMs) {
-    if (window.supabase && window.supabase.createClient) return Promise.resolve(true);
+    if (window.supabase && window.supabase.createClient) {
+      return Promise.resolve(true);
+    }
+
     if (libPromise) return libPromise;
+
     libPromise = new Promise((resolve) => {
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-      const timer = setTimeout(() => { libPromise = null; resolve(false); }, timeoutMs || 8000);
-      script.onload = () => { clearTimeout(timer); resolve(true); };
-      script.onerror = () => { clearTimeout(timer); libPromise = null; resolve(false); };
+
+      script.src =
+        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+
+      const timer = setTimeout(() => {
+        libPromise = null;
+        resolve(false);
+      }, timeoutMs || 8000);
+
+      script.onload = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+
+      script.onerror = () => {
+        clearTimeout(timer);
+        libPromise = null;
+        resolve(false);
+      };
+
       document.head.appendChild(script);
     });
+
     return libPromise;
   }
 
-  // اگه اتصال (client) هنوز آماده نشده، سعی می‌کنه بسازتش — با یه فرصت
-  // زمانی بیشتر، چون این‌بار کاربر واقعاً منتظر نتیجه‌ست (مثلاً زده «ورود»)
   async function ensureClient(timeoutMs) {
     if (client) return true;
     if (!isConfigured()) return false;
+
     const loaded = await loadSupabaseLib(timeoutMs);
-    if (!loaded || !window.supabase || !window.supabase.createClient) return false;
-    client = window.supabase.createClient(DODAY_CONFIG.SUPABASE_URL, DODAY_CONFIG.SUPABASE_ANON_KEY);
+
+    if (
+      !loaded ||
+      !window.supabase ||
+      !window.supabase.createClient
+    ) {
+      return false;
+    }
+
+    client = window.supabase.createClient(
+      DODAY_CONFIG.SUPABASE_URL,
+      DODAY_CONFIG.SUPABASE_ANON_KEY
+    );
+
     return true;
   }
 
   function isConfigured() {
-    return !!(window.DODAY_CONFIG
-      && DODAY_CONFIG.SUPABASE_URL
-      && DODAY_CONFIG.SUPABASE_ANON_KEY
-      && !DODAY_CONFIG.SUPABASE_URL.includes('YOUR-PROJECT')
-      && !DODAY_CONFIG.SUPABASE_ANON_KEY.includes('YOUR-ANON'));
+    return !!(
+      window.DODAY_CONFIG &&
+      DODAY_CONFIG.SUPABASE_URL &&
+      DODAY_CONFIG.SUPABASE_ANON_KEY &&
+      !DODAY_CONFIG.SUPABASE_URL.includes('YOUR-PROJECT') &&
+      !DODAY_CONFIG.SUPABASE_ANON_KEY.includes('YOUR-ANON')
+    );
   }
 
   function usernameToEmail(username) {
-    const domain = (window.DODAY_CONFIG && DODAY_CONFIG.AUTH_EMAIL_DOMAIN) || 'doday.local';
+    const domain =
+      (window.DODAY_CONFIG &&
+        DODAY_CONFIG.AUTH_EMAIL_DOMAIN) ||
+      'doday.local';
+
     return `${username.trim().toLowerCase()}@${domain}`;
   }
 
-  function onChange(fn) { listeners.push(fn); }
-  function emitChange() { listeners.forEach((fn) => { try { fn(); } catch (e) { /* noop */ } }); }
+  function onChange(fn) {
+    listeners.push(fn);
+  }
+
+  function emitChange() {
+    listeners.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {}
+    });
+  }
 
   async function init() {
     if (!isConfigured()) return false;
+
     const ok = await ensureClient(8000);
     if (!ok) return false;
-    try { if (localStorage.getItem('doday_sync_pending')) pendingPush = true; } catch (e) { /* noop */ }
+
+    try {
+      if (localStorage.getItem('doday_sync_pending')) {
+        pendingPush = true;
+      }
+    } catch (e) {}
+
     const { data } = await client.auth.getSession();
+
     if (data && data.session) {
       currentUser = data.session.user;
       await loadProfile();
     }
+
     client.auth.onAuthStateChange(async (_event, session) => {
       currentUser = session ? session.user : null;
-      if (currentUser) await loadProfile(); else currentProfile = null;
+
+      if (currentUser) {
+        await loadProfile();
+      } else {
+        currentProfile = null;
+      }
+
       emitChange();
     });
+
     return true;
   }
 
   async function loadProfile() {
-    if (!currentUser) { currentProfile = null; return; }
-    const { data, error } = await client.from('profiles').select('*').eq('id', currentUser.id).single();
-    if (!error) currentProfile = data;
+    if (!currentUser) {
+      currentProfile = null;
+      return;
+    }
+
+    const { data, error } = await client
+      .from('profiles')
+      .select('*')
+      .eq('id', currentUser.id)
+      .single();
+
+    if (!error) {
+      currentProfile = data;
+    }
   }
 
-  async function signUp({ username, password, displayName }) {
+  async function signUp({
+    username,
+    password,
+    displayName
+  }) {
     const ok = await ensureClient(15000);
-    if (!ok) return { ok: false, error: 'اتصال به سرور برقرار نشد، دوباره امتحان کن' };
+
+    if (!ok) {
+      return {
+        ok: false,
+        error: 'اتصال به سرور برقرار نشد، دوباره امتحان کن'
+      };
+    }
+
     const email = usernameToEmail(username);
+
     const { data, error } = await client.auth.signUp({
-      email, password,
-      options: { data: { username: username.trim().toLowerCase(), display_name: displayName || username } },
+      email,
+      password,
+      options: {
+        data: {
+          username: username.trim().toLowerCase(),
+          display_name: displayName || username
+        }
+      }
     });
-    if (error) return { ok: false, error: error.message };
-    // اگه تایید ایمیل خاموش باشه، ممکنه Supabase خودکار وارد کنه؛
-    // چون هنوز تایید ادمین رو نداره، بلافاصله خارجش می‌کنیم.
+
+    if (error) {
+      return {
+        ok: false,
+        error: error.message
+      };
+    }
+
     await client.auth.signOut();
-    currentUser = null; currentProfile = null;
-    // پروفایل توسط تریگر دیتابیس (به‌صورت خودکار) ساخته میشه — به schema.sql نگاه کن
-    return { ok: true, data };
+
+    currentUser = null;
+    currentProfile = null;
+
+    return {
+      ok: true,
+      data
+    };
   }
 
-  async function signIn({ username, password }) {
+  async function signIn({
+    username,
+    password
+  }) {
     const ok = await ensureClient(15000);
-    if (!ok) return { ok: false, error: 'اتصال به سرور برقرار نشد، دوباره امتحان کن' };
+
+    if (!ok) {
+      return {
+        ok: false,
+        error: 'اتصال به سرور برقرار نشد، دوباره امتحان کن'
+      };
+    }
+
     const email = usernameToEmail(username);
-    const { data, error } = await client.auth.signInWithPassword({ email, password });
-    if (error) return { ok: false, error: 'نام کاربری یا رمز عبور اشتباهه' };
+
+    const { data, error } =
+      await client.auth.signInWithPassword({
+        email,
+        password
+      });
+
+    if (error) {
+      return {
+        ok: false,
+        error: 'نام کاربری یا رمز عبور اشتباهه'
+      };
+    }
+
     currentUser = data.user;
+
     await loadProfile();
+
     if (!currentProfile || !currentProfile.approved) {
       await client.auth.signOut();
-      currentUser = null; currentProfile = null;
-      return { ok: false, pending: true, error: 'حساب شما هنوز توسط مدیر تایید نشده' };
+
+      currentUser = null;
+      currentProfile = null;
+
+      return {
+        ok: false,
+        pending: true,
+        error: 'حساب شما هنوز توسط مدیر تایید نشده'
+      };
     }
+
     emitChange();
-    return { ok: true };
+
+    return {
+      ok: true
+    };
   }
 
   async function signOut() {
-    if (client) await client.auth.signOut();
-    currentUser = null; currentProfile = null;
+    if (client) {
+      await client.auth.signOut();
+    }
+
+    currentUser = null;
+    currentProfile = null;
+
     emitChange();
   }
 
-  function getUser() { return currentUser; }
-  function getProfile() { return currentProfile; }
-  function isLoggedIn() { return !!(currentUser && currentProfile && currentProfile.approved); }
-  function isAdmin() { return !!(currentProfile && currentProfile.is_admin); }
-
-  // ---------------- سینک داده (یک ردیف JSON برای هر کاربر) ----------------
-  async function pushData(dataObj) {
-    if (!client || !isLoggedIn()) return { ok: false };
-    const { error } = await client.from('almanac_data').upsert({
-      user_id: currentUser.id,
-      data: dataObj,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' });
-    return { ok: !error, error: error && error.message };
+  function getUser() {
+    return currentUser;
   }
-  async function pushDataSafe(dataObj) {
-    if (!isLoggedIn()) return { ok: false };
-    // خوش‌بینانه علامت می‌زنیم: قبل از اینکه حتی بفهمیم موفق میشه یا نه.
-    // اگه همین‌جا صفحه بسته/رفرش بشه، این پرچم از قبل ذخیره شده و دفعه‌ی
-    // بعد به‌جای «خوندن و جایگزین کردن»، درست میره سراغ «ادغام و دوباره فرستادن».
-    markPending();
+
+  function getProfile() {
+    return currentProfile;
+  }
+
+  function isLoggedIn() {
+    return !!(
+      currentUser &&
+      currentProfile &&
+      currentProfile.approved
+    );
+  }
+
+  function isAdmin() {
+    return !!(
+      currentProfile &&
+      currentProfile.is_admin
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // Cloudflare Worker / Neon
+  // ---------------------------------------------------------------
+
+  async function workerRequest(path, options = {}) {
     try {
-      const res = await pushData(dataObj);
-      if (res.ok) clearPending(); else markPending();
-      return res;
+      const response = await fetch(
+        `${WORKER_URL}${path}`,
+        {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(options.headers || {})
+          }
+        }
+      );
+
+      let result = null;
+
+      try {
+        result = await response.json();
+      } catch (e) {
+        result = null;
+      }
+
+      if (!response.ok) {
+        return {
+          ok: false,
+          error:
+            (result && (result.error || result.detail)) ||
+            `HTTP ${response.status}`
+        };
+      }
+
+      return {
+        ok: true,
+        data: result
+      };
     } catch (e) {
-      markPending();
-      return { ok: false, error: 'offline' };
+      return {
+        ok: false,
+        error: 'offline'
+      };
     }
   }
 
-  // توجه: واکنش به رویداد آنلاین‌شدن (با منطق ادغام) توی app.js انجام میشه،
-  // نه اینجا — چون ادغام نیاز به دیدن کل دیتای محلی داره که اونجاست.
+  // ---------------------------------------------------------------
+  // سینک داده
+  // ---------------------------------------------------------------
+
+  async function pushData(dataObj) {
+    if (!isLoggedIn()) {
+      return {
+        ok: false
+      };
+    }
+
+    const userId = currentUser?.id || 'morteza';
+
+    const result = await workerRequest(
+      `/api/data?user=${encodeURIComponent(userId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          data: dataObj
+        })
+      }
+    );
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: result.error
+      };
+    }
+
+    return {
+      ok: true
+    };
+  }
+
+  async function pushDataSafe(dataObj) {
+    if (!isLoggedIn()) {
+      return {
+        ok: false
+      };
+    }
+
+    markPending();
+
+    try {
+      const res = await pushData(dataObj);
+
+      if (res.ok) {
+        clearPending();
+      } else {
+        markPending();
+      }
+
+      return res;
+    } catch (e) {
+      markPending();
+
+      return {
+        ok: false,
+        error: 'offline'
+      };
+    }
+  }
 
   async function pullData() {
-    if (!client || !isLoggedIn()) return { ok: false };
-    const { data, error } = await client.from('almanac_data').select('data, updated_at').eq('user_id', currentUser.id).maybeSingle();
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, data: data ? data.data : null, updatedAt: data ? data.updated_at : null };
+    if (!isLoggedIn()) {
+      return {
+        ok: false
+      };
+    }
+
+    const userId = currentUser?.id || 'morteza';
+
+    const result = await workerRequest(
+      `/api/data?user=${encodeURIComponent(userId)}`,
+      {
+        method: 'GET'
+      }
+    );
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: result.error
+      };
+    }
+
+    const payload = result.data || {};
+
+    return {
+      ok: true,
+      data: payload.data || null,
+      updatedAt: payload.updated_at || null
+    };
   }
+
+  // ---------------------------------------------------------------
+  // تاریخچه — فعلاً Supabase
+  // ---------------------------------------------------------------
 
   async function getHistory() {
     if (!client || !isLoggedIn()) return [];
+
     const { data, error } = await client
       .from('almanac_data_history')
       .select('id, saved_at')
       .eq('user_id', currentUser.id)
-      .order('saved_at', { ascending: false });
+      .order('saved_at', {
+        ascending: false
+      });
+
     return error ? [] : (data || []);
   }
 
   async function restoreFromHistory(historyId) {
-    if (!client || !isLoggedIn()) return { ok: false };
-    const { data, error } = await client.from('almanac_data_history').select('data').eq('id', historyId).eq('user_id', currentUser.id).maybeSingle();
-    if (error || !data) return { ok: false, error: error && error.message };
-    return { ok: true, data: data.data };
+    if (!client || !isLoggedIn()) {
+      return {
+        ok: false
+      };
+    }
+
+    const { data, error } = await client
+      .from('almanac_data_history')
+      .select('data')
+      .eq('id', historyId)
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error && error.message
+      };
+    }
+
+    return {
+      ok: true,
+      data: data.data
+    };
   }
 
-  // ---------------- پنل ادمین ----------------
+  // ---------------------------------------------------------------
+  // پنل ادمین — فعلاً Supabase
+  // ---------------------------------------------------------------
+
   async function adminListPending() {
     if (!client) return [];
-    const { data } = await client.from('profiles').select('*').eq('approved', false).order('created_at', { ascending: true });
+
+    const { data } = await client
+      .from('profiles')
+      .select('*')
+      .eq('approved', false)
+      .order('created_at', {
+        ascending: true
+      });
+
     return data || [];
   }
+
   async function adminListAll() {
     if (!client) return [];
-    const { data } = await client.from('profiles').select('*').order('created_at', { ascending: true });
+
+    const { data } = await client
+      .from('profiles')
+      .select('*')
+      .order('created_at', {
+        ascending: true
+      });
+
     return data || [];
   }
+
   async function adminApprove(userId) {
-    if (!client) return { ok: false };
-    const { error } = await client.from('profiles').update({ approved: true }).eq('id', userId);
-    return { ok: !error, error: error && error.message };
+    if (!client) {
+      return {
+        ok: false
+      };
+    }
+
+    const { error } = await client
+      .from('profiles')
+      .update({
+        approved: true
+      })
+      .eq('id', userId);
+
+    return {
+      ok: !error,
+      error: error && error.message
+    };
   }
+
   async function adminRevoke(userId) {
-    if (!client) return { ok: false };
-    const { error } = await client.from('profiles').update({ approved: false }).eq('id', userId);
-    return { ok: !error, error: error && error.message };
+    if (!client) {
+      return {
+        ok: false
+      };
+    }
+
+    const { error } = await client
+      .from('profiles')
+      .update({
+        approved: false
+      })
+      .eq('id', userId);
+
+    return {
+      ok: !error,
+      error: error && error.message
+    };
   }
+
   async function adminDeleteUser(userId) {
-    if (!client) return { ok: false };
-    if (currentUser && userId === currentUser.id) return { ok: false, error: 'نمی‌تونی خودت رو حذف کنی' };
-    const { error } = await client.from('profiles').delete().eq('id', userId);
-    return { ok: !error, error: error && error.message };
+    if (!client) {
+      return {
+        ok: false
+      };
+    }
+
+    if (
+      currentUser &&
+      userId === currentUser.id
+    ) {
+      return {
+        ok: false,
+        error: 'نمی‌تونی خودت رو حذف کنی'
+      };
+    }
+
+    const { error } = await client
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+
+    return {
+      ok: !error,
+      error: error && error.message
+    };
   }
 
   return {
-    init, isConfigured, onChange, setDataProvider, hasPending,
-    signUp, signIn, signOut,
-    getUser, getProfile, isLoggedIn, isAdmin,
-    pushData, pushDataSafe, pullData, getHistory, restoreFromHistory,
-    adminListPending, adminListAll, adminApprove, adminRevoke, adminDeleteUser,
+    init,
+    isConfigured,
+    onChange,
+    setDataProvider,
+    hasPending,
+
+    signUp,
+    signIn,
+    signOut,
+
+    getUser,
+    getProfile,
+    isLoggedIn,
+    isAdmin,
+
+    pushData,
+    pushDataSafe,
+    pullData,
+
+    getHistory,
+    restoreFromHistory,
+
+    adminListPending,
+    adminListAll,
+    adminApprove,
+    adminRevoke,
+    adminDeleteUser
   };
 })();
