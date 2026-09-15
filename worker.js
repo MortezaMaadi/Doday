@@ -33,7 +33,7 @@ export default {
             { status: 500 }
           );
         }
-    }
+    } 
 
     if (url.pathname === "/api/data" && request.method === "PUT") {
       try {
