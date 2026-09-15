@@ -23,14 +23,16 @@ export default {
         }
 
         return Response.json(rows[0]);
-      } catch (error) {
-        console.error(error);
-
-        return Response.json(
-          { error: "Database error" },
-          { status: 500 }
-        );
-      }
+              } catch (error) {
+          console.error(error);
+          return Response.json(
+            {
+              error: "Database error",
+              detail: error?.message || String(error)
+            },
+            { status: 500 }
+          );
+        }
     }
 
     if (url.pathname === "/api/data" && request.method === "PUT") {
@@ -61,14 +63,16 @@ export default {
         `;
 
         return Response.json(rows[0]);
-      } catch (error) {
-        console.error(error);
-
-        return Response.json(
-          { error: "Database error" },
-          { status: 500 }
-        );
-      }
+        } catch (error) {
+          console.error(error);
+          return Response.json(
+            {
+              error: "Database error",
+              detail: error?.message || String(error)
+            },
+            { status: 500 }
+          );
+        }
     }
 
     return env.ASSETS.fetch(request);
